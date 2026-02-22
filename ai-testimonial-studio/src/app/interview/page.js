@@ -2,6 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import HeaderBar from '@/components/interview/HeaderBar';
+import AmbientBackground from '@/components/home/AmbientBackground';
+import { formatTime } from '@/lib/utils';
+import CameraError from '@/components/interview/CameraError';
 
 // ─── Sample AI questions rotated as "transcript" ──────────────────────────────
 const AI_QUESTIONS = [
@@ -11,12 +15,6 @@ const AI_QUESTIONS = [
     'What\'s the one word you\'d use to describe the whole experience?',
 ];
 
-// ─── Format seconds → MM:SS ───────────────────────────────────────────────────
-function formatTime(seconds) {
-    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const s = (seconds % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-}
 
 export default function InterviewPage() {
     const router = useRouter();
@@ -140,30 +138,7 @@ export default function InterviewPage() {
 
     // ── Camera permission error screen ────────────────────────────────────────
     if (cameraError) {
-        return (
-            <div
-                className="min-h-screen flex flex-col items-center justify-center gap-6 px-8 text-center"
-                style={{ backgroundColor: '#0F0F14' }}
-            >
-                <div
-                    className="text-5xl"
-                    aria-hidden="true"
-                >
-                    🎥
-                </div>
-                <h2 className="text-2xl font-bold text-white">Camera Access Required</h2>
-                <p style={{ color: '#9ca3af' }} className="max-w-sm text-base leading-relaxed">
-                    {cameraError}
-                </p>
-                <button
-                    onClick={() => window.location.reload()}
-                    className="mt-2 rounded-xl px-6 py-3 font-semibold text-white transition-all duration-200 hover:scale-105"
-                    style={{ background: 'linear-gradient(135deg, #7c3aed, #3b82f6)' }}
-                >
-                    Retry
-                </button>
-            </div>
-        );
+        return <CameraError cameraError={cameraError}/>
     }
 
     // ── Main interview layout ──────────────────────────────────────────────────
@@ -173,28 +148,7 @@ export default function InterviewPage() {
             style={{ backgroundColor: '#0F0F14' }}
         >
             {/* ── Top header bar ── */}
-            <header
-                className="flex items-center justify-between px-6 py-4"
-                style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
-            >
-                <span
-                    className="text-sm font-semibold tracking-widest uppercase"
-                    style={{ color: '#7c3aed' }}
-                >
-                    AI Testimonial Studio
-                </span>
-
-                {/* Live badge */}
-                <div className="flex items-center gap-2">
-                    <span
-                        className="inline-block w-2 h-2 rounded-full animate-pulse"
-                        style={{ backgroundColor: '#ef4444' }}
-                    />
-                    <span className="text-xs font-medium" style={{ color: '#f87171' }}>
-                        LIVE
-                    </span>
-                </div>
-            </header>
+            <HeaderBar/>
 
             {/* ── Main content: AI panel (30%) + Camera (70%) ── */}
             <div className="flex flex-1 gap-4 px-4 pt-4 lg:flex-row flex-col">
@@ -209,6 +163,7 @@ export default function InterviewPage() {
                     }}
                 >
                     {/* Ambient orb behind avatar */}
+                    <AmbientBackground/>
                     <div
                         aria-hidden="true"
                         className="absolute rounded-full blur-3xl"
