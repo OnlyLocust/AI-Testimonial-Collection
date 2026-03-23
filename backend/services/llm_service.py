@@ -27,4 +27,9 @@ def generate_first_question(business_prompt):
 
 def generate_followup_question(business_prompt, history, last_answer):
     # Replace with your followup_chain
-    return "What did you like most about it?"
+    result = followup_chain.invoke({
+        "business_prompt": business_prompt,
+        "conversation_history": history,
+        "last_answer": last_answer
+    })
+    return result["followup_question"]
