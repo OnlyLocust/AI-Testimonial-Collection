@@ -15,9 +15,40 @@ llm = ChatGoogleGenerativeAI(
 
 
 
+first_question_prompt = PromptTemplate(
+    input_variables=["business_prompt"],
+    template="""
+You are a friendly AI interviewer collecting a video testimonial.
+
+Context:
+{business_prompt}
+
+Task:
+Generate ONE engaging opening question to start the testimonial interview.
+
+Rules:
+- Keep it under 20 words
+- Make it conversational
+- Do NOT add explanations
+- Only return the question
+
+Question:
+"""
+)
+
+first_question_chain = LLMChain(
+    llm=llm,
+    prompt=first_question_prompt,
+    output_key="question"
+)
+
 def generate_first_question(business_prompt):
     # Replace with your first_question_chain
-    return "What made you choose our product/service?"
+    business_prompt = "Collect testimonial for my pizza restaurant"
+    result = first_question_chain.invoke({
+        "business_prompt": business_prompt
+    })
+    return result["question"]
 
 def generate_followup_question(business_prompt, history, last_answer):
     # Replace with your followup_chain
