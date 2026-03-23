@@ -13,7 +13,7 @@ first_question_chain = LLMChain(
 
 followup_chain = LLMChain(
     llm=llm,
-    prompt=followup_prompt,
+    prompt=followup_question_prompt,
     output_key="followup_question"
 )
 
