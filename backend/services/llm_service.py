@@ -1,8 +1,9 @@
 from langchain_classic.chains import LLMChain
 from langchain_core.prompts import PromptTemplate
 
-from services.prompts.first_question import first_question_prompt
 from services.llm.llm_init import llm
+from services.prompts.first_question import first_question_prompt
+from services.prompts.follow_question import followup_question_prompt
 
 first_question_chain = LLMChain(
     llm=llm,
@@ -10,9 +11,15 @@ first_question_chain = LLMChain(
     output_key="question"
 )
 
+followup_chain = LLMChain(
+    llm=llm,
+    prompt=followup_prompt,
+    output_key="followup_question"
+)
+
 def generate_first_question(business_prompt):
     # Replace with your first_question_chain
-    business_prompt = "Collect testimonial for my pizza restaurant"
+    # business_prompt = "Collect testimonial for my pizza restaurant"
     result = first_question_chain.invoke({
         "business_prompt": business_prompt
     })
