@@ -1,19 +1,8 @@
-from dotenv import load_dotenv
-import os
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_classic.chains import LLMChain
 from langchain_core.prompts import PromptTemplate
 
 from services.prompts.first_question import first_question_prompt
-load_dotenv()
-API_KEY=os.getenv("GOOGLE_API_KEY")
-
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash", 
-    temperature=0.2,
-    google_api_key=API_KEY
-)
-
+from services.llm.llm_init import llm
 
 first_question_chain = LLMChain(
     llm=llm,
