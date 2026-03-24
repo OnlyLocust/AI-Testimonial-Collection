@@ -7,6 +7,7 @@ from services.llm_service import (
     generate_first_question,
     generate_followup_question
 )
+from services.sentiment_service import detect_sentiment
 
 router = APIRouter()
 
@@ -16,7 +17,7 @@ def get_conversation_text(session):
     history = ""
     for qa in session["conversation"]:
         if qa["answer"]:
-            history += f"\nAI: {qa['question']}\nUser: {qa['answer']}"
+            history += f"\nAI: {qa['question']}\nUser: {qa['answer']} (Sentiment: {qa['sentiment']})"
     return history
 
 
@@ -56,9 +57,16 @@ def next_question(req: AnswerRequest):
         return {"error": "Invalid session_id"}
 
     session = sessions[session_id]
+    business_prompt = session["business_prompt"]
 
-    # 1. Fill previous answer
+    # 1. Store answer
     session["conversation"][-1]["answer"] = user_answer
+
+    # 2. Detect sentiment
+    sentiment = detect_sentiment(user_answer,business_prompt)
+
+    # 3. Store sentiment
+    session["conversation"][-1]["sentiment"] = sentiment
 
     # 2. Build history
     history = get_conversation_text(session)
@@ -76,7 +84,7 @@ def next_question(req: AnswerRequest):
         "answer": None,
         "sentiment": None
     })
-
+    
     return {
         "question": next_q
     }
