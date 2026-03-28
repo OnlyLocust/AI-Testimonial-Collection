@@ -1,28 +1,28 @@
 import { useState, useEffect, useRef } from 'react';
 
-export function useInterview(questions, onEnd) {
+export function useInterview(onEnd) {
     const [isRecording, setIsRecording] = useState(false);
     const [isAISpeaking, setIsAISpeaking] = useState(true);
-    const [transcriptText, setTranscriptText] = useState(questions[0]);
+    const [transcriptText, setTranscriptText] = useState("");
     const [captionVisible, setCaptionVisible] = useState(true);
     const [timeRemaining, setTimeRemaining] = useState(120);
     const [cameraError, setCameraError] = useState(null);
-    const [questionIndex, setQuestionIndex] = useState(0);
 
     const videoRef = useRef(null);
     const streamRef = useRef(null);
-    
-    // Task 1: Full Video Refs
     const fullRecorderRef = useRef(null);
     const fullVideoChunks = useRef([]);
-
-    // Task 2: Q&A Answer Refs
     const answerRecorderRef = useRef(null);
     const currentAnswerChunks = useRef([]);
 
-    // --- 1. Camera Initialization ---
+    // --- 1. Initial Load & Camera Start ---
     useEffect(() => {
         let mounted = true;
+        
+        // Load the very first question from localStorage immediately
+        const firstQuestion = sessionStorage.getItem('current_question');
+        if (firstQuestion) setTranscriptText(firstQuestion);
+
         async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
@@ -34,8 +34,11 @@ export function useInterview(questions, onEnd) {
                 streamRef.current = stream;
                 if (videoRef.current) videoRef.current.srcObject = stream;
                 
-                // Start Task 1: The Full Recording
-                startFullRecording(stream);
+                // Start Full Recording (Task 1)
+                const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9,opus' });
+                fullRecorderRef.current = recorder;
+                recorder.ondataavailable = (e) => { if (e.data.size > 0) fullVideoChunks.current.push(e.data); };
+                recorder.start();
                 
                 setIsRecording(true);
             } catch (err) {
@@ -45,137 +48,107 @@ export function useInterview(questions, onEnd) {
         startCamera();
         return () => {
             mounted = false;
-            stopAllRecording();
+            fullRecorderRef.current?.stop();
+            answerRecorderRef.current?.stop();
+            streamRef.current?.getTracks().forEach(t => t.stop());
         };
     }, []);
 
-    // --- 2. Full Video Logic (Task 1) ---
-    const startFullRecording = (stream) => {
-        const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9,opus' });
-        fullRecorderRef.current = recorder;
-        recorder.ondataavailable = (e) => {
-            if (e.data.size > 0) fullVideoChunks.current.push(e.data);
+    // --- 2. The Interview Logic Cycle ---
+    // This effect runs whenever isAISpeaking changes to manage the "Speak -> Listen" flow
+    useEffect(() => {
+        if (!isRecording) return;
+
+        const runCycle = async () => {
+            if (isAISpeaking) {
+                // AI is "Speaking" the current transcriptText
+                setCaptionVisible(true);
+                // Wait 5 seconds (simulating AI speech time)
+                await new Promise(res => setTimeout(res, 5000));
+                setIsAISpeaking(false); // Switch to listening mode
+            } else {
+                // AI starts "Listening"
+                startAnswerCapture();
+                // Wait 6 seconds for user to speak
+                await new Promise(res => setTimeout(res, 6000));
+                stopAnswerCapture(); // This triggers sendAnswerToServer
+            }
         };
-        recorder.start();
-    };
 
-    const stopAllRecording = () => {
-        fullRecorderRef.current?.stop();
-        answerRecorderRef.current?.stop();
-        streamRef.current?.getTracks().forEach(t => t.stop());
-    };
+        runCycle();
+    }, [isRecording, isAISpeaking]);
 
-    // --- 3. Speech-to-Text Logic (Task 2) ---
-    // --- 1. Update the Answer Capture to use a Clone ---
-const startAnswerCapture = () => {
-    // Safety check: Don't start if already recording or stream lost
-    if (!streamRef.current || !streamRef.current.active) return;
-    if (answerRecorderRef.current && answerRecorderRef.current.state !== 'inactive') return;
+    // --- 3. Recording "Answer Slices" (Task 2) ---
+    const startAnswerCapture = () => {
+        if (!streamRef.current || !streamRef.current.active) return;
+        if (answerRecorderRef.current?.state === 'recording') return;
 
-    currentAnswerChunks.current = [];
-    
-    try {
-        // CLONE THE STREAM: This is the magic fix
-        const clonedStream = streamRef.current.clone();
-        
-        // Use standard settings
-        const recorder = new MediaRecorder(clonedStream);
-        answerRecorderRef.current = recorder;
-        
-        recorder.ondataavailable = (e) => {
-            if (e.data.size > 0) currentAnswerChunks.current.push(e.data);
-        };
-        
-        recorder.onstop = async () => {
-            const audioBlob = new Blob(currentAnswerChunks.current, { type: 'audio/webm' });
-            sendAnswerToServer(audioBlob);
+        currentAnswerChunks.current = [];
+        try {
+            const clonedStream = streamRef.current.clone();
+            const recorder = new MediaRecorder(clonedStream);
+            answerRecorderRef.current = recorder;
             
-            // CLEAN UP: Stop the cloned tracks to save CPU/Memory
-            clonedStream.getTracks().forEach(track => track.stop());
-        };
-        
-        recorder.start();
-        console.log("🎤 Cloned stream recording started...");
-    } catch (err) {
-        console.error("Critical Recorder Error:", err);
-    }
-};
+            recorder.ondataavailable = (e) => {
+                if (e.data.size > 0) currentAnswerChunks.current.push(e.data);
+            };
+            
+            recorder.onstop = async () => {
+                const audioBlob = new Blob(currentAnswerChunks.current, { type: 'audio/webm' });
+                sendAnswerToServer(audioBlob);
+                clonedStream.getTracks().forEach(track => track.stop());
+            };
+            
+            recorder.start();
+            console.log("🎤 Recording answer...");
+        } catch (err) {
+            console.error("Capture Error:", err);
+        }
+    };
 
-// --- 2. Update the Stop function to be safer ---
-const stopAnswerCapture = () => {
-    if (answerRecorderRef.current && answerRecorderRef.current.state === 'recording') {
-        answerRecorderRef.current.stop();
-        console.log("🛑 Stopped answer capture.");
-    }
-};
+    const stopAnswerCapture = () => {
+        if (answerRecorderRef.current?.state === 'recording') {
+            answerRecorderRef.current.stop();
+        }
+    };
 
+    // --- 4. Server Communication ---
     const sendAnswerToServer = async (blob) => {
         const formData = new FormData();
         formData.append('audio', blob, 'answer.webm');
-        console.log("📤 Prepared audio blob for upload:", blob);
+        formData.append('session_id', sessionStorage.getItem('session_id'));
 
-        // uncomment this when calling real server
+        try {
+            console.log("📤 Sending to backend...");
+            // const response = await fetch('http://localhost:8000/transcribe', {
+            //     method: 'POST',
+            //     body: formData
+            // });
+            // const data = await response.json();
+            const data = { next_question: "What was the biggest challenge you faced?" }; // Mock response for testing
+            console.log("📥 Received from backend:", data);
 
-        // try {
-        //     const response = await fetch('YOUR_SERVER_URL/transcribe', {
-        //         method: 'POST',
-        //         body: formData
-        //     });
-        //     const data = await response.json();
-        //     console.log("📝 Transcription received:", data.text);
-        // } catch (err) {
-        //     console.error("Failed to send audio to server", err);
-        // }
+            if (data.next_question) {
+                // UPDATE: Store new question and trigger "Speaking" phase again
+                sessionStorage.setItem('current_question', data.next_question);
+                setTranscriptText(data.next_question);
+                setIsAISpeaking(true); 
+            }
+        } catch (err) {
+            console.error("Server Error:", err);
+            // Fallback: If server fails, just move to a generic next step
+            setIsAISpeaking(true);
+        }
     };
 
-    // --- 4. AI Question Cycle & Timer ---
-    useEffect(() => {
-        if (!isRecording) return;
-        let speakTimer, listenTimer;
-
-        function nextCycle(index) {
-            // AI START SPEAKING
-            setIsAISpeaking(true);
-            setCaptionVisible(false);
-            
-            setTimeout(() => {
-                setTranscriptText(questions[index % questions.length]);
-                setCaptionVisible(true);
-            }, 300);
-
-            // After 4s of AI speaking, AI stops and listens
-            speakTimer = setTimeout(() => {
-                setIsAISpeaking(false);
-                
-                // START capturing the answer chunk
-                startAnswerCapture();
-
-                // Listen for 6 seconds (or until pause)
-                listenTimer = setTimeout(() => {
-                    // STOP capturing the answer chunk (this triggers upload)
-                    stopAnswerCapture();
-
-                    setQuestionIndex(prev => {
-                        const next = (prev + 1) % questions.length;
-                        nextCycle(next);
-                        return next;
-                    });
-                }, 6000); 
-            }, 4000);
-        }
-
-        nextCycle(questionIndex);
-        return () => { clearTimeout(speakTimer); clearTimeout(listenTimer); };
-    }, [isRecording]);
-
-    // Timer Logic
+    // --- 5. Global Timer ---
     useEffect(() => {
         if (!isRecording) return;
         const interval = setInterval(() => {
             setTimeRemaining(prev => {
                 if (prev <= 1) {
                     clearInterval(interval);
-                    onEnd(fullVideoChunks.current); // Pass data to end handler
+                    onEnd(fullVideoChunks.current);
                     return 0;
                 }
                 return prev - 1;
@@ -186,7 +159,6 @@ const stopAnswerCapture = () => {
 
     return { 
         videoRef, isRecording, isAISpeaking, transcriptText, 
-        captionVisible, timeRemaining, cameraError, streamRef,
-        fullVideoChunks 
+        captionVisible, timeRemaining, cameraError, streamRef 
     };
 }
