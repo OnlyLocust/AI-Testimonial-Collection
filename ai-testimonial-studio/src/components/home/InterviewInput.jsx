@@ -35,7 +35,7 @@ const handleStart = async () => {
 
         // 3. Store session data
         sessionStorage.setItem("current_session_id", data.session_id);
-        sessionStorage.setItem("initial_question", data.question);
+        sessionStorage.setItem("current_question", data.question);
 
         router.push("/interview");
 
