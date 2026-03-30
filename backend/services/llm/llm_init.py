@@ -4,9 +4,18 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 load_dotenv()
 API_KEY=os.getenv("GOOGLE_API_KEY")
+DEV_MODE = os.getenv("DEV_MODE", "False") == "True"
 
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash", 
-    temperature=0.2,
-    google_api_key=API_KEY
-)
+
+llm = None
+
+if not DEV_MODE:
+    
+    print("Production mode")
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash",
+        temperature=0.2,
+        google_api_key=API_KEY
+    )
+else:
+    print("Dev mode")
