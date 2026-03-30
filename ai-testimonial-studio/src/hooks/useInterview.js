@@ -116,7 +116,7 @@ export function useInterview(onEnd) {
     const sendAnswerToServer = async (blob) => {
         const formData = new FormData();
         formData.append('audio', blob, 'answer.webm');
-        formData.append('session_id', sessionStorage.getItem('session_id'));
+        formData.append('session_id', sessionStorage.getItem('current_session_id'));
 
         try {
             console.log("📤 Sending to backend...");
@@ -125,14 +125,31 @@ export function useInterview(onEnd) {
             //     body: formData
             // });
             // const data = await response.json();
-            const data = { next_question: "What was the biggest challenge you faced?" }; // Mock response for testing
+
+            const sendData = {
+                session_id: sessionStorage.getItem('current_session_id'),
+                answer:"I liked the cheese and the crust was amazing!"
+            }
+
+            console.log(sendData);
+            
+
+            const response = await fetch('http://localhost:8000/next-question', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(sendData),
+            });
+            const data = await response.json();
+            // const data = { next_question: "What was the biggest challenge you faced?" }; // Mock response for testing
             console.log("📥 Received from backend:", data);
 
             if (data.next_question) {
                 // UPDATE: Store new question and trigger "Speaking" phase again
                 sessionStorage.setItem('current_question', data.next_question);
                 setTranscriptText(data.next_question);
-                setIsAISpeaking(true); 
+                setIsAISpeaking(true);
             }
         } catch (err) {
             console.error("Server Error:", err);
