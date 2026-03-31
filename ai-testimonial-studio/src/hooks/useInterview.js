@@ -192,15 +192,18 @@ export function useInterview(onEnd) {
 
         try {
             console.log("📤 Sending to backend...");
-            // const response = await fetch('http://localhost:8000/transcribe', {
-            //     method: 'POST',
-            //     body: formData
-            // });
-            // const data = await response.json();
+            const res = await fetch('http://localhost:8000/transcribe', {
+                method: 'POST',
+                body: formData
+            });
+            const text = await res.json();
+
+            // console.log(text.transcript);
+            
 
             const sendData = {
                 session_id: sessionStorage.getItem('current_session_id'),
-                answer:"I liked the cheese and the crust was amazing!"
+                answer:text.transcript
             }
 
             console.log(sendData);
