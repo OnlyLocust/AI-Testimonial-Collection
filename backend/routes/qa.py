@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, UploadFile, File, Form
 import uuid
 
 from models.schemas import StartRequest, AnswerRequest
@@ -8,6 +8,15 @@ from services.llm_service import (
     generate_followup_question
 )
 from services.sentiment_service import detect_sentiment
+
+    
+import speech_recognition as sr
+from pydub import AudioSegment
+import io
+
+
+r = sr.Recognizer()
+
 
 router = APIRouter()
 
@@ -88,3 +97,26 @@ def next_question(req: AnswerRequest):
     return {
         "question": next_q
     }
+
+@router.post("/transcribe")
+async def transcribe_audio(audio: UploadFile = File(...)):
+    # 1. Load the WebM data
+    audio_bytes = await audio.read()
+    audio_file = io.BytesIO(audio_bytes)
+    
+    # 2. Convert WebM to WAV in memory
+    audio_segment = AudioSegment.from_file(audio_file, format="webm")
+    wav_io = io.BytesIO()
+    audio_segment.export(wav_io, format="wav")
+    wav_io.seek(0)
+
+    # 3. Recognize using Google
+    with sr.AudioFile(wav_io) as source:
+        audio_data = r.record(source)
+        try:
+            text = r.recognize_google(audio_data)
+            return {"transcript": text}
+        except sr.UnknownValueError:
+            return {"transcript": "", "error": "Could not understand audio"}
+        except sr.RequestError:
+            return {"transcript": "", "error": "API unavailable"}
