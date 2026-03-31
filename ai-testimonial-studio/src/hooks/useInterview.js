@@ -15,6 +15,13 @@ export function useInterview(onEnd) {
     const answerRecorderRef = useRef(null);
     const currentAnswerChunks = useRef([]);
 
+    const answerSilenceTimerRef = useRef(null);
+    const answerMaxTimerRef = useRef(null);
+    const vadAnimationFrameRef = useRef(null);
+    const audioContextRef = useRef(null);
+    const analyserRef = useRef(null);
+    const vadStateRef = useRef({ lastSpeechTime: 0, startedAt: 0 });
+
     // --- 1. Initial Load & Camera Start ---
     useEffect(() => {
         let mounted = true;
@@ -50,6 +57,10 @@ export function useInterview(onEnd) {
             mounted = false;
             fullRecorderRef.current?.stop();
             answerRecorderRef.current?.stop();
+            if (answerMaxTimerRef.current) clearTimeout(answerMaxTimerRef.current);
+            if (answerSilenceTimerRef.current) clearTimeout(answerSilenceTimerRef.current);
+            if (vadAnimationFrameRef.current) cancelAnimationFrame(vadAnimationFrameRef.current);
+            if (audioContextRef.current) audioContextRef.current.close().catch(() => {});
             streamRef.current?.getTracks().forEach(t => t.stop());
         };
     }, []);
@@ -69,9 +80,10 @@ export function useInterview(onEnd) {
             } else {
                 // AI starts "Listening"
                 startAnswerCapture();
-                // Wait 6 seconds for user to speak
-                await new Promise(res => setTimeout(res, 6000));
-                stopAnswerCapture(); // This triggers sendAnswerToServer
+                // Maximum listen time fallback (30s)
+                answerMaxTimerRef.current = setTimeout(() => {
+                    stopAnswerCapture();
+                }, 30000);
             }
         };
 
@@ -84,29 +96,89 @@ export function useInterview(onEnd) {
         if (answerRecorderRef.current?.state === 'recording') return;
 
         currentAnswerChunks.current = [];
+        vadStateRef.current = { lastSpeechTime: performance.now(), startedAt: performance.now() };
+
         try {
             const clonedStream = streamRef.current.clone();
             const recorder = new MediaRecorder(clonedStream);
             answerRecorderRef.current = recorder;
-            
+
+            // Setup VAD (silence detection) from cloned audio stream
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            audioContextRef.current = audioCtx;
+            const source = audioCtx.createMediaStreamSource(clonedStream);
+            const analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 2048;
+            analyserRef.current = analyser;
+            source.connect(analyser);
+
+            const dataArray = new Uint8Array(analyser.fftSize);
+            const silenceThreshold = 0.02; // adjust as needed
+            const silenceLimitMs = 5000;
+
+            const checkVoiceActivity = () => {
+                analyser.getByteTimeDomainData(dataArray);
+                let sum = 0;
+                for (let i = 0; i < dataArray.length; i++) {
+                    const normalized = (dataArray[i] - 128) / 128;
+                    sum += normalized * normalized;
+                }
+                const rms = Math.sqrt(sum / dataArray.length);
+                const now = performance.now();
+
+                if (rms > silenceThreshold) {
+                    vadStateRef.current.lastSpeechTime = now;
+                }
+
+                if (now - vadStateRef.current.lastSpeechTime > silenceLimitMs) {
+                    stopAnswerCapture();
+                    return;
+                }
+
+                vadAnimationFrameRef.current = requestAnimationFrame(checkVoiceActivity);
+            };
+
+            vadAnimationFrameRef.current = requestAnimationFrame(checkVoiceActivity);
+
             recorder.ondataavailable = (e) => {
                 if (e.data.size > 0) currentAnswerChunks.current.push(e.data);
             };
-            
+
             recorder.onstop = async () => {
                 const audioBlob = new Blob(currentAnswerChunks.current, { type: 'audio/webm' });
                 sendAnswerToServer(audioBlob);
                 clonedStream.getTracks().forEach(track => track.stop());
             };
-            
+
             recorder.start();
-            console.log("🎤 Recording answer...");
+            console.log("🎤 Recording answer with silence auto-stop...");
         } catch (err) {
             console.error("Capture Error:", err);
         }
     };
 
     const stopAnswerCapture = () => {
+        if (answerMaxTimerRef.current) {
+            clearTimeout(answerMaxTimerRef.current);
+            answerMaxTimerRef.current = null;
+        }
+        if (answerSilenceTimerRef.current) {
+            clearTimeout(answerSilenceTimerRef.current);
+            answerSilenceTimerRef.current = null;
+        }
+        if (vadAnimationFrameRef.current) {
+            cancelAnimationFrame(vadAnimationFrameRef.current);
+            vadAnimationFrameRef.current = null;
+        }
+        if (analyserRef.current) {
+            analyserRef.current.disconnect();
+            analyserRef.current = null;
+        }
+        if (audioContextRef.current) {
+            audioContextRef.current.close().catch(() => {});
+            audioContextRef.current = null;
+        }
+
         if (answerRecorderRef.current?.state === 'recording') {
             answerRecorderRef.current.stop();
         }
