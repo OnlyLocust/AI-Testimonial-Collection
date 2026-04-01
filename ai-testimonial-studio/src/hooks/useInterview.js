@@ -65,6 +65,34 @@ export function useInterview(onEnd) {
         };
     }, []);
 
+    const speakText = (text) => {
+    return new Promise((resolve) => {
+        if (!window.speechSynthesis) {
+            console.warn("Speech synthesis not supported");
+            resolve();
+            return;
+        }
+
+        const utterance = new SpeechSynthesisUtterance(text);
+
+        // Optional tuning
+        utterance.rate = 1;      // speed (0.5 - 2)
+        utterance.pitch = 1;     // voice pitch
+        utterance.volume = 1;    // volume
+
+        // Choose a voice (optional but nice)
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(v => v.lang.includes("en"));
+        if (preferredVoice) utterance.voice = preferredVoice;
+
+        utterance.onend = () => {
+            resolve(); // when AI finishes speaking
+        };
+
+        window.speechSynthesis.speak(utterance);
+    });
+};
+
     // --- 2. The Interview Logic Cycle ---
     // This effect runs whenever isAISpeaking changes to manage the "Speak -> Listen" flow
     useEffect(() => {
@@ -75,7 +103,8 @@ export function useInterview(onEnd) {
                 // AI is "Speaking" the current transcriptText
                 setCaptionVisible(true);
                 // Wait 5 seconds (simulating AI speech time)
-                await new Promise(res => setTimeout(res, 5000));
+                // await new Promise(res => setTimeout(res, 5000));
+                await speakText(transcriptText);
                 setIsAISpeaking(false); // Switch to listening mode
             } else {
                 // AI starts "Listening"
