@@ -69,6 +69,7 @@ const handleStart = async () => {
                     id="prompt-input"
                     type="text"
                     disabled={isLoading}
+                    suppressHydrationWarning={true}
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleStart()}

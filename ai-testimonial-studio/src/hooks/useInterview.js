@@ -66,32 +66,32 @@ export function useInterview(onEnd) {
     }, []);
 
     const speakText = (text) => {
-    return new Promise((resolve) => {
-        if (!window.speechSynthesis) {
-            console.warn("Speech synthesis not supported");
-            resolve();
-            return;
-        }
+        return new Promise((resolve) => {
+            if (!window.speechSynthesis) {
+                console.warn("Speech synthesis not supported");
+                resolve();
+                return;
+            }
 
-        const utterance = new SpeechSynthesisUtterance(text);
+            const utterance = new SpeechSynthesisUtterance(text);
 
-        // Optional tuning
-        utterance.rate = 1;      // speed (0.5 - 2)
-        utterance.pitch = 1;     // voice pitch
-        utterance.volume = 1;    // volume
+            // Optional tuning
+            utterance.rate = 1;      // speed (0.5 - 2)
+            utterance.pitch = 1;     // voice pitch
+            utterance.volume = 1;    // volume
 
-        // Choose a voice (optional but nice)
-        const voices = window.speechSynthesis.getVoices();
-        const preferredVoice = voices.find(v => v.lang.includes("en"));
-        if (preferredVoice) utterance.voice = preferredVoice;
+            // Choose a voice (optional but nice)
+            const voices = window.speechSynthesis.getVoices();
+            const preferredVoice = voices.find(v => v.lang.includes("en"));
+            if (preferredVoice) utterance.voice = preferredVoice;
 
-        utterance.onend = () => {
-            resolve(); // when AI finishes speaking
-        };
+            utterance.onend = () => {
+                resolve(); // when AI finishes speaking
+            };
 
-        window.speechSynthesis.speak(utterance);
-    });
-};
+            window.speechSynthesis.speak(utterance);
+        });
+    };
 
     // --- 2. The Interview Logic Cycle ---
     // This effect runs whenever isAISpeaking changes to manage the "Speak -> Listen" flow
@@ -227,7 +227,7 @@ export function useInterview(onEnd) {
             });
             const text = await res.json();
 
-            // console.log(text.transcript);
+            console.log(text.transcript);
             
 
             const sendData = {
@@ -247,12 +247,12 @@ export function useInterview(onEnd) {
             });
             const data = await response.json();
             // const data = { next_question: "What was the biggest challenge you faced?" }; // Mock response for testing
-            console.log("📥 Received from backend:", data);
+            console.log("📥 Received from backend:", data.question);
 
-            if (data.next_question) {
+            if (data.question) {
                 // UPDATE: Store new question and trigger "Speaking" phase again
-                sessionStorage.setItem('current_question', data.next_question);
-                setTranscriptText(data.next_question);
+                sessionStorage.setItem('current_question', data.question);
+                setTranscriptText(data.question);
                 setIsAISpeaking(true);
             }
         } catch (err) {
