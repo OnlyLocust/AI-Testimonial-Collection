@@ -9,11 +9,15 @@ from services.llm_service import (
 )
 from services.sentiment_service import detect_sentiment
 
-    
 import speech_recognition as sr
 from pydub import AudioSegment
 import io
 
+from dotenv import load_dotenv
+import os
+load_dotenv()
+
+DurationLimit = int(os.getenv("DurationLimit"))
 
 r = sr.Recognizer()
 
@@ -62,12 +66,21 @@ def start_interview(req: StartRequest):
 def next_question(req: AnswerRequest):
     session_id = req.session_id
     user_answer = req.answer
+    current_time = req.current_time
 
     if session_id not in sessions:
         return {"error": "Invalid session_id"}
 
     session = sessions[session_id]
     business_prompt = session["business_prompt"]
+    
+    duration = (req.current_time - session["start_time"]).total_seconds()
+
+    if duration > DurationLimit:
+        return {
+            "status": "complete", 
+            "message": "Time limit reached. Thank you!"
+        }
 
     # 1. Store answer
     session["conversation"][-1]["answer"] = user_answer
@@ -96,6 +109,7 @@ def next_question(req: AnswerRequest):
     })
     
     return {
+        "status": "continue",
         "question": next_q
     }
 
