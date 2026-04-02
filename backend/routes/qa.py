@@ -39,6 +39,7 @@ def start_interview(req: StartRequest):
     first_question = generate_first_question(req.business_prompt)
 
     sessions[session_id] = {
+        "start_time": req.start_time,
         "business_prompt": req.business_prompt,
         "conversation": [
             {
