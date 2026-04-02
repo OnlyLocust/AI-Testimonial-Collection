@@ -8,3 +8,4 @@ class StartRequest(BaseModel):
 class AnswerRequest(BaseModel):
     session_id: str
     answer: str
+    current_time: datetime
