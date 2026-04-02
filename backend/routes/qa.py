@@ -1,5 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, Form
 import uuid
+from datetime import datetime, timezone
 
 from models.schemas import StartRequest, AnswerRequest
 from utils.session_store import sessions
@@ -43,7 +44,7 @@ def start_interview(req: StartRequest):
     first_question = generate_first_question(req.business_prompt)
 
     sessions[session_id] = {
-        "start_time": req.start_time,
+        "start_time": datetime.now(timezone.utc),
         "business_prompt": req.business_prompt,
         "conversation": [
             {
@@ -66,7 +67,6 @@ def start_interview(req: StartRequest):
 def next_question(req: AnswerRequest):
     session_id = req.session_id
     user_answer = req.answer
-    current_time = req.current_time
 
     if session_id not in sessions:
         return {"error": "Invalid session_id"}
@@ -74,7 +74,8 @@ def next_question(req: AnswerRequest):
     session = sessions[session_id]
     business_prompt = session["business_prompt"]
     
-    duration = (req.current_time - session["start_time"]).total_seconds()
+    current_time = datetime.now(timezone.utc)
+    duration = (current_time - session["start_time"]).total_seconds()
 
     if duration > DurationLimit:
         return {

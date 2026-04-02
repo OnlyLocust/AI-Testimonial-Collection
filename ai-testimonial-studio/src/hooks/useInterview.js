@@ -233,7 +233,6 @@ export function useInterview(onEnd) {
             const sendData = {
                 session_id: sessionStorage.getItem('current_session_id'),
                 answer:text.transcript ,
-                current_time: new Date().toISOString()
             }
 
             console.log(sendData);
