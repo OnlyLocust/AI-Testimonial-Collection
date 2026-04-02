@@ -17,10 +17,16 @@ const handleStart = async () => {
     setIsLoading(true);
 
     try {
+        // --- CHANGE: Capture the current time ---
+        const startTime = new Date().toISOString();
+
         // 1. Send prompt to Python Backend
         const response = await axios.post(
             "http://127.0.0.1:8000/start",
-            { business_prompt: prompt },
+            { 
+                business_prompt: prompt ,
+                start_time: startTime
+            },
             {
                 headers: {
                     "Content-Type": "application/json",
