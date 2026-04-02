@@ -232,7 +232,8 @@ export function useInterview(onEnd) {
 
             const sendData = {
                 session_id: sessionStorage.getItem('current_session_id'),
-                answer:text.transcript
+                answer:text.transcript ,
+                current_time: new Date().toISOString()
             }
 
             console.log(sendData);
@@ -247,8 +248,13 @@ export function useInterview(onEnd) {
             });
             const data = await response.json();
             // const data = { next_question: "What was the biggest challenge you faced?" }; // Mock response for testing
-            console.log("📥 Received from backend:", data.question);
-
+            console.log("📥 Received from backend:", data);
+            if(data.status === "complete") {
+                // setTranscriptText("Thank you for your time! The interview is now complete.");
+                // setIsAISpeaking(true);
+                alert("Interview complete: " + data.message);
+                return;
+            }
             if (data.question) {
                 // UPDATE: Store new question and trigger "Speaking" phase again
                 sessionStorage.setItem('current_question', data.question);
