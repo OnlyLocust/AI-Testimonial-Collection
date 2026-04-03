@@ -221,7 +221,7 @@ export function useInterview(onEnd) {
 
         try {
             console.log("📤 Sending to backend...");
-            const res = await fetch('http://localhost:8000/transcribe', {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/transcribe`, {
                 method: 'POST',
                 body: formData
             });
@@ -238,7 +238,7 @@ export function useInterview(onEnd) {
             console.log(sendData);
             
 
-            const response = await fetch('http://localhost:8000/next-question', {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/next-question`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

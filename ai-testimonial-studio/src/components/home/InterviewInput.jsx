@@ -2,7 +2,6 @@
 
 import { useRouter } from 'next/navigation';
 import React, { useState } from "react";
-import axios from "axios";
 
 const InterviewInput = () => {
     const [prompt, setPrompt] = useState('');
@@ -20,19 +19,18 @@ const handleStart = async () => {
         // --- CHANGE: Capture the current time ---
 
         // 1. Send prompt to Python Backend
-        const response = await axios.post(
-            "http://127.0.0.1:8000/start",
-            { 
-                business_prompt: prompt 
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/start`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
             },
-            {
-                headers: {
-                    "Content-Type": "application/json",
-                },
-            }
-        );
+            body: JSON.stringify({
+                business_prompt: prompt,
+            }),
+        });
 
-        const data = response.data;
+        
+        const data = await response.json();
 
         // 2. data contains { "session_id": "...", "question": "..." }
         console.log("Session Started:", data);
