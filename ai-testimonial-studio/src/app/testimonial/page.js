@@ -77,7 +77,7 @@ const TestimonialResultPage = () => {
             <span className="text-xs font-bold tracking-widest uppercase text-purple-300">Analysis Complete</span>
           </motion.div>
           <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4 tracking-tight">
-            Your Testimonial is <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-600">Ready</span>
+            Your Testimonial is <span className="text-transparent bg-clip-text bg-linear-to-r from-purple-400 to-violet-600">Ready</span>
           </h1>
           <p className="text-slate-400 max-w-lg mx-auto">
             We've transformed your interview responses into a powerful, high-impact testimonial.
@@ -90,12 +90,12 @@ const TestimonialResultPage = () => {
           className="relative group mb-8"
         >
           {/* Neon Border Glow Effect */}
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-3xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
+          <div className="absolute -inset-0.5 bg-linear-to-r from-purple-600 to-indigo-600 rounded-3xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
           
           <div className="relative bg-[#121217] border border-white/10 rounded-3xl overflow-hidden backdrop-blur-xl">
             
             {/* Tone Selector Tabs */}
-            <div className="flex border-b border-white/5 bg-white/[0.02]">
+            <div className="flex border-b border-white/5 bg-white/2">
               {Object.keys(tones).map((tone) => (
                 <button
                   key={tone}
@@ -134,7 +134,7 @@ const TestimonialResultPage = () => {
                       <textarea
                         value={testimonial}
                         onChange={(e) => setTestimonial(e.target.value)}
-                        className="w-full h-40 bg-white/[0.03] border border-purple-500/30 rounded-2xl p-4 text-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all font-light leading-relaxed"
+                        className="w-full h-40 bg-white/3 border border-purple-500/30 rounded-2xl p-4 text-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all font-light leading-relaxed"
                       />
                     ) : (
                       <p className="text-xl md:text-2xl font-light leading-relaxed text-slate-100 italic text-center">
@@ -157,7 +157,7 @@ const TestimonialResultPage = () => {
             </div>
 
             {/* Actions Bar */}
-            <div className="px-8 py-6 bg-white/[0.02] border-t border-white/5 flex flex-wrap gap-4 justify-between items-center">
+            <div className="px-8 py-6 bg-white/2 border-t border-white/5 flex flex-wrap gap-4 justify-between items-center">
               <div className="flex space-x-3">
                 <button 
                   onClick={copyToClipboard}
@@ -193,14 +193,14 @@ const TestimonialResultPage = () => {
 
         {/* Visual Divider */}
         <div className="flex items-center space-x-4 mb-12 opacity-30">
-          <div className="h-px flex-1 bg-gradient-to-r from-transparent to-slate-700" />
+          <div className="h-px flex-1 bg-linear-to-r from-transparent to-slate-700" />
           <Zap className="w-4 h-4 text-slate-500" />
-          <div className="h-px flex-1 bg-gradient-to-l from-transparent to-slate-700" />
+          <div className="h-px flex-1 bg-linear-to-l from-transparent to-slate-700" />
         </div>
 
         {/* 4. Reel Generation Section (The Upgrade) */}
         <section className="relative">
-          <div className="bg-gradient-to-b from-white/[0.05] to-transparent border border-white/10 rounded-3xl p-8 md:p-12 overflow-hidden">
+          <div className="bg-linear-to-b from-white/5 to-transparent border border-white/10 rounded-3xl p-8 md:p-12 overflow-hidden">
             <div className="flex flex-col md:flex-row items-center justify-between gap-8">
               <div className="text-center md:text-left">
                 <h3 className="text-2xl font-bold text-white mb-2 flex items-center justify-center md:justify-start">
