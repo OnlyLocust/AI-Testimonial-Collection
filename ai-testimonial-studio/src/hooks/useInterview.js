@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 
 export function useInterview(onEnd) {
+    const router = useRouter();
     const [isRecording, setIsRecording] = useState(false);
     const [isAISpeaking, setIsAISpeaking] = useState(true);
     const [transcriptText, setTranscriptText] = useState("");
@@ -252,6 +254,7 @@ export function useInterview(onEnd) {
                 // setTranscriptText("Thank you for your time! The interview is now complete.");
                 // setIsAISpeaking(true);
                 alert("Interview complete: " + data.message);
+                router.push("/testimonial");
                 return;
             }
             if (data.question) {
