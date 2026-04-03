@@ -78,9 +78,9 @@ export function useInterview(onEnd) {
             const utterance = new SpeechSynthesisUtterance(text);
 
             // Optional tuning
-            utterance.rate = 1;      // speed (0.5 - 2)
-            utterance.pitch = 1;     // voice pitch
-            utterance.volume = 1;    // volume
+            utterance.rate = 0.8;      // speed (0.5 - 2)
+            utterance.pitch = 20;     // voice pitch
+            utterance.volume = 3;    // volume
 
             // Choose a voice (optional but nice)
             const voices = window.speechSynthesis.getVoices();
@@ -251,10 +251,12 @@ export function useInterview(onEnd) {
             // const data = { next_question: "What was the biggest challenge you faced?" }; // Mock response for testing
             console.log("📥 Received from backend:", data);
             if(data.status === "complete") {
-                // setTranscriptText("Thank you for your time! The interview is now complete.");
-                // setIsAISpeaking(true);
-                alert("Interview complete: " + data.message);
-                router.push("/testimonial");
+                setTranscriptText("Thank you for your time! The interview is now complete.");
+                setIsAISpeaking(true);
+                // alert("Interview complete: " + data.message);
+                setTimeout(() => {
+                    router.push("/testimonial");
+                }, 5000);
                 return;
             }
             if (data.question) {
