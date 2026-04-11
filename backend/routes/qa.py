@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 
 from models.schemas import StartRequest, AnswerRequest
-from utils.session_store import sessions
+from database import get_session, save_session, sessions_collection
 from services.llm_service import (
     generate_first_question,
     generate_followup_question
@@ -38,12 +38,13 @@ def get_conversation_text(session):
 # ----------- START INTERVIEW -----------
 
 @router.post("/start")
-def start_interview(req: StartRequest):
+async def start_interview(req: StartRequest):
     session_id = str(uuid.uuid4())
 
     first_question = generate_first_question(req.business_prompt)
 
-    sessions[session_id] = {
+    session_doc = {
+        "_id": session_id,
         "start_time": datetime.now(timezone.utc),
         "business_prompt": req.business_prompt,
         "conversation": [
@@ -55,6 +56,8 @@ def start_interview(req: StartRequest):
         ]
     }
 
+    await save_session(session_doc)
+
     return {
         "session_id": session_id,
         "question": first_question
@@ -64,18 +67,22 @@ def start_interview(req: StartRequest):
 # ----------- NEXT QUESTION -----------
 
 @router.post("/next-question")
-def next_question(req: AnswerRequest):
+async def next_question(req: AnswerRequest):
     session_id = req.session_id
     user_answer = req.answer
 
-    if session_id not in sessions:
+    session = await get_session(session_id)
+    if not session:
         return {"error": "Invalid session_id"}
 
-    session = sessions[session_id]
     business_prompt = session["business_prompt"]
     
     current_time = datetime.now(timezone.utc)
-    duration = (current_time - session["start_time"]).total_seconds()
+    start_time = session["start_time"]
+    if start_time.tzinfo is None:
+        start_time = start_time.replace(tzinfo=timezone.utc)
+        
+    duration = (current_time - start_time).total_seconds()
 
     if duration > DurationLimit:
         return {
@@ -83,36 +90,53 @@ def next_question(req: AnswerRequest):
             "message": "Time limit reached. Thank you!"
         }
 
-    # 1. Store answer
-    session["conversation"][-1]["answer"] = user_answer
+    # Detect sentiment
+    sentiment = detect_sentiment(user_answer, business_prompt)
 
-    # 2. Detect sentiment
-    sentiment = detect_sentiment(user_answer,business_prompt)
+    # Mutate local session to construct new history accurately
+    last_idx = len(session["conversation"]) - 1
+    session["conversation"][last_idx]["answer"] = user_answer
+    session["conversation"][last_idx]["sentiment"] = sentiment
 
-    # 3. Store sentiment
-    session["conversation"][-1]["sentiment"] = sentiment
-
-    # 2. Build history
+    # Build history
     history = get_conversation_text(session)
 
-    # 3. Generate next question
+    # Generate next question
     next_q = generate_followup_question(
-        session["business_prompt"],
+        business_prompt,
         history,
         user_answer
     )
 
-    # 4. Append new question
-    session["conversation"].append({
-        "question": next_q,
-        "answer": None,
-        "sentiment": None
-    })
+    # find_one_and_update the conversation history and sentiment
+    await sessions_collection.find_one_and_update(
+        {"_id": session_id},
+        {
+            "$set": {
+                f"conversation.{last_idx}.answer": user_answer,
+                f"conversation.{last_idx}.sentiment": sentiment
+            },
+            "$push": {
+                "conversation": {
+                    "question": next_q,
+                    "answer": None,
+                    "sentiment": None
+                }
+            }
+        }
+    )
     
     return {
         "status": "continue",
         "question": next_q
     }
+
+@router.get("/verify-session/{session_id}")
+async def verify_session(session_id: str):
+    session = await get_session(session_id)
+    if session:
+        return {"status": "valid"}
+    return {"status": "invalid"}
 
 @router.post("/transcribe")
 async def transcribe_audio(audio: UploadFile = File(...)):

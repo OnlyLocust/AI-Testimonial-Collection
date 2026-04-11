@@ -15,15 +15,6 @@ def get_sentiment_chain():
         prompt=sentiment_prompt,
         output_key="sentiment"
     )
-    
-def get_sentiment_chain():
-    if DEV_MODE:
-        return None  # not needed
-    return LLMChain(
-        llm=llm,
-        prompt=sentiment_prompt,
-        output_key="sentiment"
-    )
 
 def detect_sentiment(user_answer, business_prompt):
 
