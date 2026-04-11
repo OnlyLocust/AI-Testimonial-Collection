@@ -28,9 +28,30 @@ export function useInterview(onEnd) {
     useEffect(() => {
         let mounted = true;
         
-        // Load the very first question from localStorage immediately
-        const firstQuestion = sessionStorage.getItem('current_question');
-        if (firstQuestion) setTranscriptText(firstQuestion);
+        async function verifySessionAndStart() {
+            const currentSessionId = sessionStorage.getItem('current_session_id');
+            if (currentSessionId) {
+                try {
+                    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/verify-session/${currentSessionId}`);
+                    const data = await res.json();
+                    if (data.status !== "valid") {
+                        console.warn("Orphaned session found, clearing and redirecting.");
+                        sessionStorage.removeItem('current_session_id');
+                        sessionStorage.removeItem('current_question');
+                        router.push("/");
+                        return;
+                    }
+                } catch (err) {
+                    console.error("Error verifying session:", err);
+                }
+            }
+
+            // Load the very first question from localStorage immediately
+            const firstQuestion = sessionStorage.getItem('current_question');
+            if (firstQuestion) setTranscriptText(firstQuestion);
+
+            await startCamera();
+        }
 
         async function startCamera() {
             try {
@@ -54,7 +75,7 @@ export function useInterview(onEnd) {
                 if (mounted) setCameraError(err.name === 'NotAllowedError' ? 'Access Denied' : 'Camera Error');
             }
         }
-        startCamera();
+        verifySessionAndStart();
         return () => {
             mounted = false;
             fullRecorderRef.current?.stop();
