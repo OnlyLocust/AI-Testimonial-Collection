@@ -6,3 +6,6 @@ class StartRequest(BaseModel):
 class AnswerRequest(BaseModel):
     session_id: str
     answer: str
+
+class SynthesizeRequest(BaseModel):
+    session_id: str
