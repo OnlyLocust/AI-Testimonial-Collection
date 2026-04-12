@@ -272,12 +272,25 @@ export function useInterview(onEnd) {
             // const data = { next_question: "What was the biggest challenge you faced?" }; // Mock response for testing
             console.log("📥 Received from backend:", data);
             if(data.status === "complete") {
-                setTranscriptText("Thank you for your time! The interview is now complete.");
+                setTranscriptText("Thank you for your time! The interview is now complete. We are generating your testimonial...");
                 setIsAISpeaking(true);
-                // alert("Interview complete: " + data.message);
-                setTimeout(() => {
-                    router.push("/testimonial");
-                }, 5000);
+                
+                const synthPromise = fetch(`${process.env.NEXT_PUBLIC_API_URL}/synthesize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionStorage.getItem('current_session_id') }),
+                })
+                .then(r => r.json())
+                .then(bundle => {
+                    sessionStorage.setItem('testimonial_bundle', JSON.stringify(bundle));
+                })
+                .catch(e => console.error("Synthesis error:", e));
+
+                const redirectTimer = new Promise(resolve => setTimeout(resolve, 5000));
+                
+                await Promise.all([synthPromise, redirectTimer]);
+                
+                router.push("/testimonial");
                 return;
             }
             if (data.question) {

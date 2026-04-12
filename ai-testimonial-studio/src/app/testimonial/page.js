@@ -20,22 +20,31 @@ const TestimonialResultPage = () => {
   const [isGeneratingReel, setIsGeneratingReel] = useState(false);
   const [reelGenerated, setReelGenerated] = useState(false);
 
-  // --- Mock Data ---
-  const tones = {
-    formal: "The level of professionalism and technical expertise displayed throughout our engagement was exemplary. Their AI-driven approach significantly optimized our workflow, resulting in a 40% increase in efficiency. I highly recommend their services for any enterprise seeking cutting-edge solutions.",
-    casual: "Honestly, this tool is a game-changer! 🚀 I was blown away by how easy it was to get my thoughts across. The AI really 'got' what I was trying to say and turned it into a killer testimonial. If you're on the fence, just try it—you won't regret it!",
-    linkedin: "I’m thrilled to share my experience working with this innovative platform. The integration of AI into the feedback loop is seamless and powerful. It’s rare to find a product that balances sophisticated tech with such a user-centric design. #Innovation #SaaS #AI"
-  };
+  // --- Data States ---
+  const [bundleData, setBundleData] = useState({
+    formal: "Loading formal testimonial...",
+    casual: "Loading casual testimonial...",
+    linkedin: "Loading linkedin testimonial...",
+    highlights: ["Loading..."]
+  });
 
-  const highlights = ["40% Efficiency Boost", "Seamless Integration", "User-Centric Design"];
+  useEffect(() => {
+    const stored = sessionStorage.getItem('testimonial_bundle');
+    if (stored) {
+      try {
+        setBundleData(JSON.parse(stored));
+      } catch (e) {
+        console.error("Failed to parse testimonial_bundle", e);
+      }
+    }
+  }, []);
 
-  // --- Mock API Calls ---
-  const generateTestimonial = (tone) => {
+  const generateTestimonial = (tone, currentBundle) => {
     setLoading(true);
     setTimeout(() => {
-      setTestimonial(tones[tone]);
+      setTestimonial((currentBundle || bundleData)[tone] || "Error loading testimonial.");
       setLoading(false);
-    }, 1500);
+    }, 800);
   };
 
   const handleGenerateReel = () => {
@@ -47,8 +56,8 @@ const TestimonialResultPage = () => {
   };
 
   useEffect(() => {
-    generateTestimonial('formal');
-  }, []);
+    generateTestimonial(selectedTone, bundleData);
+  }, [selectedTone, bundleData]);
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(testimonial);
@@ -96,10 +105,10 @@ const TestimonialResultPage = () => {
             
             {/* Tone Selector Tabs */}
             <div className="flex border-b border-white/5 bg-white/2">
-              {Object.keys(tones).map((tone) => (
+              {['formal', 'casual', 'linkedin'].map((tone) => (
                 <button
                   key={tone}
-                  onClick={() => { setSelectedTone(tone); generateTestimonial(tone); }}
+                  onClick={() => setSelectedTone(tone)}
                   className={`flex-1 py-4 text-sm font-semibold transition-all relative ${
                     selectedTone === tone ? 'text-purple-400' : 'text-slate-500 hover:text-slate-300'
                   }`}
@@ -172,7 +181,7 @@ const TestimonialResultPage = () => {
                 </button>
               </div>
               <button 
-                onClick={() => generateTestimonial(selectedTone)}
+                onClick={() => generateTestimonial(selectedTone, bundleData)}
                 className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-500 px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all shadow-[0_0_20px_rgba(168,85,247,0.4)] active:scale-95"
               >
                 <RefreshCcw className="w-4 h-4" />
@@ -184,7 +193,7 @@ const TestimonialResultPage = () => {
 
         {/* 3. Highlights Tags */}
         <div className="flex flex-wrap justify-center gap-3 mb-16">
-          {highlights.map((h, i) => (
+          {(bundleData.highlights || []).map((h, i) => (
             <span key={i} className="px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-bold uppercase tracking-tight">
               {h}
             </span>
