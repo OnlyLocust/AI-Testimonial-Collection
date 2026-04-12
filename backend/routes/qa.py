@@ -1,8 +1,9 @@
 from fastapi import APIRouter, UploadFile, File, Form
 import uuid
 from datetime import datetime, timezone
+from services.synthesis_service import generate_testimonial_bundle
 
-from models.schemas import StartRequest, AnswerRequest
+from models.schemas import StartRequest, AnswerRequest , SynthesizeRequest
 from database import get_session, save_session, sessions_collection
 from services.llm_service import (
     generate_first_question,
@@ -160,3 +161,15 @@ async def transcribe_audio(audio: UploadFile = File(...)):
             return {"transcript": "", "error": "Could not understand audio"}
         except sr.RequestError:
             return {"transcript": "", "error": "API unavailable"}
+
+
+@router.post("/synthesize")
+async def synthesize_testimonial(req: SynthesizeRequest):
+    session_id = req.session_id
+    session = await get_session(session_id)
+    if not session:
+        return {"error": "Invalid session_id"}
+    
+    history = get_conversation_text(session)
+    bundle = generate_testimonial_bundle(history)
+    return bundle
