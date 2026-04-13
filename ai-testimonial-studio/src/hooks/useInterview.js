@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
 export function useInterview(onEnd) {
@@ -9,6 +9,11 @@ export function useInterview(onEnd) {
     const [captionVisible, setCaptionVisible] = useState(true);
     const [timeRemaining, setTimeRemaining] = useState(120);
     const [cameraError, setCameraError] = useState(null);
+    const [isFinished, setIsFinished] = useState(false);
+
+    // --- New states for error handling & retry UX ---
+    const [retryMessage, setRetryMessage] = useState(null);   // "retry" status message
+    const [networkError, setNetworkError] = useState(false);  // true → show Reconnect button
 
     const videoRef = useRef(null);
     const streamRef = useRef(null);
@@ -24,29 +29,43 @@ export function useInterview(onEnd) {
     const analyserRef = useRef(null);
     const vadStateRef = useRef({ lastSpeechTime: 0, startedAt: 0 });
 
+    // Stable reference to the latest blob — used by the reconnect flow
+    const lastBlobRef = useRef(null);
+
     // --- 1. Initial Load & Camera Start ---
     useEffect(() => {
         let mounted = true;
-        
+
         async function verifySessionAndStart() {
             const currentSessionId = sessionStorage.getItem('current_session_id');
             if (currentSessionId) {
                 try {
                     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/verify-session/${currentSessionId}`);
                     const data = await res.json();
-                    if (data.status !== "valid") {
-                        console.warn("Orphaned session found, clearing and redirecting.");
+
+                    if (data.status === "expired" || data.status === "invalid") {
+                        console.warn("Orphaned / expired session found, clearing and redirecting.");
                         sessionStorage.removeItem('current_session_id');
                         sessionStorage.removeItem('current_question');
                         router.push("/");
                         return;
+                    }
+
+                    // ✅ Clock sync: restore server-authoritative time on refresh
+                    if (typeof data.time_remaining === 'number') {
+                        setTimeRemaining(data.time_remaining);
+                    }
+
+                    // ✅ Restore current question if present
+                    if (data.current_question) {
+                        sessionStorage.setItem('current_question', data.current_question);
                     }
                 } catch (err) {
                     console.error("Error verifying session:", err);
                 }
             }
 
-            // Load the very first question from localStorage immediately
+            // Load the very first question from sessionStorage immediately
             const firstQuestion = sessionStorage.getItem('current_question');
             if (firstQuestion) setTranscriptText(firstQuestion);
 
@@ -60,21 +79,22 @@ export function useInterview(onEnd) {
                     audio: true,
                 });
                 if (!mounted) return stream.getTracks().forEach(t => t.stop());
-                
+
                 streamRef.current = stream;
                 if (videoRef.current) videoRef.current.srcObject = stream;
-                
-                // Start Full Recording (Task 1)
+
+                // Start Full Recording
                 const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9,opus' });
                 fullRecorderRef.current = recorder;
                 recorder.ondataavailable = (e) => { if (e.data.size > 0) fullVideoChunks.current.push(e.data); };
                 recorder.start();
-                
+
                 setIsRecording(true);
             } catch (err) {
                 if (mounted) setCameraError(err.name === 'NotAllowedError' ? 'Access Denied' : 'Camera Error');
             }
         }
+
         verifySessionAndStart();
         return () => {
             mounted = false;
@@ -97,40 +117,29 @@ export function useInterview(onEnd) {
             }
 
             const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 0.8;
+            utterance.pitch = 20;
+            utterance.volume = 3;
 
-            // Optional tuning
-            utterance.rate = 0.8;      // speed (0.5 - 2)
-            utterance.pitch = 20;     // voice pitch
-            utterance.volume = 3;    // volume
-
-            // Choose a voice (optional but nice)
             const voices = window.speechSynthesis.getVoices();
             const preferredVoice = voices.find(v => v.lang.includes("en"));
             if (preferredVoice) utterance.voice = preferredVoice;
 
-            utterance.onend = () => {
-                resolve(); // when AI finishes speaking
-            };
-
+            utterance.onend = () => resolve();
             window.speechSynthesis.speak(utterance);
         });
     };
 
     // --- 2. The Interview Logic Cycle ---
-    // This effect runs whenever isAISpeaking changes to manage the "Speak -> Listen" flow
     useEffect(() => {
         if (!isRecording) return;
 
         const runCycle = async () => {
             if (isAISpeaking) {
-                // AI is "Speaking" the current transcriptText
                 setCaptionVisible(true);
-                // Wait 5 seconds (simulating AI speech time)
-                // await new Promise(res => setTimeout(res, 5000));
                 await speakText(transcriptText);
-                setIsAISpeaking(false); // Switch to listening mode
+                setIsAISpeaking(false);
             } else {
-                // AI starts "Listening"
                 startAnswerCapture();
                 // Maximum listen time fallback (30s)
                 answerMaxTimerRef.current = setTimeout(() => {
@@ -142,7 +151,7 @@ export function useInterview(onEnd) {
         runCycle();
     }, [isRecording, isAISpeaking]);
 
-    // --- 3. Recording "Answer Slices" (Task 2) ---
+    // --- 3. Recording "Answer Slices" ---
     const startAnswerCapture = () => {
         if (!streamRef.current || !streamRef.current.active) return;
         if (answerRecorderRef.current?.state === 'recording') return;
@@ -155,7 +164,6 @@ export function useInterview(onEnd) {
             const recorder = new MediaRecorder(clonedStream);
             answerRecorderRef.current = recorder;
 
-            // Setup VAD (silence detection) from cloned audio stream
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             audioContextRef.current = audioCtx;
             const source = audioCtx.createMediaStreamSource(clonedStream);
@@ -165,7 +173,7 @@ export function useInterview(onEnd) {
             source.connect(analyser);
 
             const dataArray = new Uint8Array(analyser.fftSize);
-            const silenceThreshold = 0.02; // adjust as needed
+            const silenceThreshold = 0.02;
             const silenceLimitMs = 5000;
 
             const checkVoiceActivity = () => {
@@ -198,6 +206,7 @@ export function useInterview(onEnd) {
 
             recorder.onstop = async () => {
                 const audioBlob = new Blob(currentAnswerChunks.current, { type: 'audio/webm' });
+                lastBlobRef.current = audioBlob; // store for reconnect path
                 sendAnswerToServer(audioBlob);
                 clonedStream.getTracks().forEach(track => track.stop());
             };
@@ -238,43 +247,54 @@ export function useInterview(onEnd) {
 
     // --- 4. Server Communication ---
     const sendAnswerToServer = async (blob) => {
-        const formData = new FormData();
-        formData.append('audio', blob, 'answer.webm');
-        formData.append('session_id', sessionStorage.getItem('current_session_id'));
+        setNetworkError(false); // clear any previous network error
 
+        // ── Step 1: Transcribe ──
+        let transcript = "";
         try {
+            const formData = new FormData();
+            formData.append('audio', blob, 'answer.webm');
+
             console.log("📤 Sending to backend...");
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/transcribe`, {
                 method: 'POST',
                 body: formData
             });
             const text = await res.json();
+            transcript = text.transcript ?? "";
+            console.log("Transcript:", transcript);
+        } catch (err) {
+            console.error("Transcription network error:", err);
+            setNetworkError(true);
+            return; // stop here — Reconnect button will re-trigger
+        }
 
-            console.log(text.transcript);
-            
-
+        // ── Step 2: Next question ──
+        try {
             const sendData = {
                 session_id: sessionStorage.getItem('current_session_id'),
-                answer:text.transcript ,
-            }
-
-            console.log(sendData);
-            
+                answer: transcript,
+            };
 
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/next-question`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(sendData),
             });
             const data = await response.json();
-            // const data = { next_question: "What was the biggest challenge you faced?" }; // Mock response for testing
             console.log("📥 Received from backend:", data);
-            if(data.status === "complete") {
+
+            // ── Clock sync: always update from server ──
+            if (typeof data.time_remaining === 'number') {
+                setTimeRemaining(data.time_remaining);
+            }
+
+            // ── Handle status ──
+            if (data.status === "complete") {
+                setRetryMessage(null);
                 setTranscriptText("Thank you for your time! The interview is now complete. We are generating your testimonial...");
                 setIsAISpeaking(true);
-                
+
                 const synthPromise = fetch(`${process.env.NEXT_PUBLIC_API_URL}/synthesize`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -287,43 +307,66 @@ export function useInterview(onEnd) {
                 .catch(e => console.error("Synthesis error:", e));
 
                 const redirectTimer = new Promise(resolve => setTimeout(resolve, 5000));
-                
                 await Promise.all([synthPromise, redirectTimer]);
-                
                 router.push("/testimonial");
                 return;
             }
+
+            if (data.status === "retry") {
+                // Show neon warning toast — do NOT advance the question
+                setRetryMessage(data.message);
+                // Re-enter listening mode immediately
+                setIsAISpeaking(false);
+                startAnswerCapture();
+                answerMaxTimerRef.current = setTimeout(() => stopAnswerCapture(), 30000);
+                return;
+            }
+
             if (data.question) {
-                // UPDATE: Store new question and trigger "Speaking" phase again
+                setRetryMessage(null); // clear any previous retry warning
                 sessionStorage.setItem('current_question', data.question);
                 setTranscriptText(data.question);
                 setIsAISpeaking(true);
             }
         } catch (err) {
-            console.error("Server Error:", err);
-            // Fallback: If server fails, just move to a generic next step
-            setIsAISpeaking(true);
+            console.error("Next-question network error:", err);
+            setNetworkError(true);
         }
     };
 
-    // --- 5. Global Timer ---
+    // Reconnect: re-attempt with the last recorded blob
+    const handleReconnect = useCallback(() => {
+        if (lastBlobRef.current) {
+            setNetworkError(false);
+            sendAnswerToServer(lastBlobRef.current);
+        }
+    }, []);
+    useEffect(() => {
+        if (isFinished) {
+            // Now it's safe to navigate or call onEnd
+            onEnd(fullVideoChunks.current);
+            router.push("/testimonial"); 
+        }
+    }, [isFinished, router, onEnd]);
+    // --- 5. Global Timer — syncs to server after each response ---
     useEffect(() => {
         if (!isRecording) return;
         const interval = setInterval(() => {
             setTimeRemaining(prev => {
                 if (prev <= 1) {
                     clearInterval(interval);
-                    onEnd(fullVideoChunks.current);
+                    setIsFinished(true); // <--- Set this instead of calling onEnd
                     return 0;
                 }
                 return prev - 1;
             });
         }, 1000);
         return () => clearInterval(interval);
-    }, [isRecording, onEnd]);
+    }, [isRecording]);
 
-    return { 
-        videoRef, isRecording, isAISpeaking, transcriptText, 
-        captionVisible, timeRemaining, cameraError, streamRef 
+    return {
+        videoRef, isRecording, isAISpeaking, transcriptText,
+        captionVisible, timeRemaining, cameraError, streamRef,
+        retryMessage, networkError, handleReconnect,
     };
 }
