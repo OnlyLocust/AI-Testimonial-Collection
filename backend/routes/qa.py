@@ -225,6 +225,21 @@ async def synthesize_testimonial(req: SynthesizeRequest):
     if not session:
         return {"error": "Invalid session_id"}
 
+    # ── Session Finalizer Guard ──────────────────────────────────────────────
+    # If the session is already published, return the cached bundle to avoid
+    # making a redundant (and expensive) LLM call for the same conversation data.
+    if session.get("is_published") and session.get("cached_bundle"):
+        return session["cached_bundle"]
+    # ─────────────────────────────────────────────────────────────────────────
+
     history = get_conversation_text(session)
     bundle = generate_testimonial_bundle(history)
+
+    # ── Mark session as finalised & cache the bundle ─────────────────────────
+    await sessions_collection.find_one_and_update(
+        {"_id": session_id},
+        {"$set": {"is_published": True, "cached_bundle": bundle}}
+    )
+    # ─────────────────────────────────────────────────────────────────────────
+
     return bundle
